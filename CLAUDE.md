@@ -49,17 +49,25 @@
 후속 액션 유도 없는 순수 대시보드 성격.
 
 ## 기술 스택
-- Canvas 2D API
-- 순수 HTML/CSS/JS
-- 단일 HTML 파일
+- **Three.js r128** (cdnjs CDN) — Canvas 2D 아님. CLAUDE.md 구버전 기술스택은 폐기됨.
+- 단일 `index.html` (인라인 `<script>`), 순수 HTML/CSS/JS
+- GLTFLoader + meshopt_decoder (로컬 `lib/`), GLB는 EXT_meshopt_compression + EXT_texture_webp + KHR_mesh_quantization
+- 카메라: OrthographicCamera 아이소메트릭, 회전 없음(평행이동+줌만)
 
 ## 파일 구조
 ```
-wellness-marble/
+Wellness_Marble/
 ├── CLAUDE.md
-├── index.html                 # 메인 파일
-├── lib/                        # GLTFLoader, meshopt decoder (로컬)
-└── asset/bike/                 # 자전거 glb (원본 + .opt.glb 압축본)
+├── index.html                 # 메인 파일 (Three.js 씬 전체)
+├── lib/                        # GLTFLoader.js, meshopt_decoder.js (로컬 r128)
+├── .claude/launch.json         # preview 서버 'wm' (npx serve, 포트 8139, 레포 루트)
+└── asset/
+    ├── bike/                   # 자전거 glb (원본 .gitignore, .opt.glb만 사용/커밋)
+    ├── activity/               # 활동의 광장 보상 (최적화됨, 원본 파일명으로 교체)
+    ├── appearance/             # 미학의 거리 보상 (최적화됨)
+    ├── restoration/            # 휴식의 해변 보상 (최적화 불필요, 원본)
+    ├── mind/                   # 사색의 언덕 보상 (최적화 불필요, 원본)
+    └── palm_pbr.glb            # 무인도 야자수 (최적화 불필요)
 ```
 
 ## 핵심 원리
@@ -222,16 +230,76 @@ wellness-marble/
 | 19 | 토성 | 천문 |
 | 20 | 천체망원경 | 기타 |
 
-## 작업 이력
-- [ ] 보드판 기본 레이아웃 구현 (1열 사각형 궤도)
-- [ ] 4개 구역 + 4개 모서리 타일 렌더링
-- [ ] 타일 이름 표시
-- [ ] 말 순환 애니메이션 구현
-- [ ] 말 속도 ↔ 저속노화 속도 연동
-- [ ] 시계탑 모서리 노화속도 표시
-- [ ] 보상 아이템 드랍 + 타일 배치 로직
-- [ ] 슬롯 잠금/해제 애니메이션
-- [ ] PoC 컨트롤 패널 구현 (슬라이더 + 트리거 버튼 9개)
-- [ ] 황금열쇠 이벤트 씬
-- [ ] 무인도 이벤트 씬
-- [ ] 보상 희귀도 등급 설계
+---
+
+# 현재 구현 상태 / 다른 기기 작업 인계 (2026-05-18 기준)
+
+> 위쪽 "보상 테이블 / 트리거 버튼 9개"는 **설계 스펙(미래)**. 아래가 **실제 구현 상태**.
+> 컨트롤 패널은 Slow_Museum 패널을 그대로 재사용(설계 스펙의 9개 트리거와 다름) — 현재 컨트롤은
+> 카드 숫자만 갱신, 보드 씬 미연동(`onScoresApplied()` 비어있음, 다음 단계 연동 지점).
+
+## 구현 완료
+- 아이소메트릭 보드(4변×7타일 + 4코너 = 32칸), 타일명/라벨, 나무판 베이스, 중앙 로고
+- 시계탑 코너 → **이정표(milestone/signpost)** 로 대체됨 (`window.__signpost`)
+- 토큰 = **자전거 PBR GLB**가 Catmull-Rom 폐곡선 경로를 순환 (`bikeLead`, `updateToken`)
+- 보상 14개 GLB를 타일에 배치(`REWARD_MODELS` → `loadRewards()`), 무인도 야자수 GLB(`island()`, `window.__palm`)
+- 그림자: VSM(부드러운 소멸) + 이정표만 셰도우 패스에서 물리적 제외
+- 자전거 발밑 진행축 컨택트 블롭, 이정표 발밑 블롭
+
+## 그림자 시스템 (중요 — 재실수 방지)
+- `renderer.shadowMap.type = THREE.VSMShadowMap` (부드럽고 자연스러운 소멸).
+- **VSM은 `castShadow=false`를 무시**(라이트블리드)함. 그래서 이정표 긴 태양그림자가 안 꺼졌던 게
+  과거 수시간 버그의 근본 원인. 해결책: `renderer.shadowMap.render` 몽키패치로 **셰도우(깊이) 패스
+  동안만 `window.__signpost`를 `visible=false`** → 셰도우맵에서 물리적으로 빠지고 본 렌더엔 보임.
+  → VSM으로 되돌리거나 이 몽키패치를 지우면 이정표 긴 그림자가 재발한다. 건드리지 말 것.
+- 태양 위치 `(-15,17,12)` 고정. `sun.shadow.radius`=VSM 블러량(현재 20), mapSize 4096.
+- 보드 외 배경은 `ShadowMaterial` 캐처(opacity 0.26)가 받음.
+
+## 보상 GLB 시스템 (`index.html`의 `REWARD_MODELS` 배열 + `loadRewards()`)
+타일 인덱스: 0=start, 1..7=move(활동), 8=golden, 9..15=rest(휴식), 16=clock(이정표),
+17..23=groom(미학), 24=island(무인도), 25..31=manage(사색). 타일명은 변별 7개 순서대로.
+
+현재 매핑(타일→idx→glb):
+| 구역(폴더) | 배치 |
+|---|---|
+| 활동(asset/activity) | 도약2=train, 열정4=stadium, 약진6=construction |
+| 휴식(asset/restoration) | 여백10=rainbow, 숨결13=tetrafish, 평온14=diver |
+| 미학(asset/appearance) | 색채18=cherryblossom, 감각19=effel_tower, 섬세20=cherryblossom, 멋21=art_park |
+| 사색(asset/mind) | 침묵25=pagoda, 통찰26=ankor, 내면27=pagoda, 명상30=stonhenge |
+
+**타일별 튜닝 노브** (REWARD_MODELS 항목에 옵션 필드로 한 줄 추가):
+- `s` 크기배율(기본1) · `dx,dy,dz` 월드 위치 미세조정 · `db` 밴드축(+타일위쪽/리본쪽, −아래쪽/길쪽)
+- `yaw` 회전(도, **양수=반시계** — 이정표 코드와 동일 관례) · `b` 밝기배율 · `k` 콘트라스트(셰이더, 보상만)
+- 애니메이션: `hop`(상하 진폭)+`hopHz`, `sway`(±도 좌우)+`swayHz`, `spin`(도/초 연속회전).
+  부호 반전으로 역위상 가능(다이버/테트라피쉬가 그 예). 렌더루프에서 적용.
+- 금속성은 로드시 전 보상 `metalness=0` 강제(파일에서도 제거됨).
+
+## 에셋 최적화 파이프라인 (다른 기기에서 재현용)
+대용량 원본(15~18MB)만 최적화 후 **원본 파일명으로 교체**. 작은 건 그대로 둠.
+1. 금속성 제거: `@gltf-transform/core` 스크립트로 모든 material `metallicFactor=0`,
+   metallicRoughnessTexture 제거, clearcoat/specular/sheen/iridescence 확장 제거.
+2. `npx @gltf-transform/cli@4 optimize IN OUT --compress meshopt --texture-compress webp --texture-size 512`
+   → 15~18MB → ~1MB (자전거 .opt.glb 수준).
+3. 무결성은 `gltf-transform inspect`로 확인(EXT_meshopt/webp/quantization). NodeIO 단독 read는
+   meshopt 디코더 없어 실패하는 게 정상(브라우저 GLTFLoader는 MeshoptDecoder 있어 정상 로드).
+   (이전 스크립트/스크래치 폴더는 원래 기기의 C:\Temp\glbopt 로 레포에 없음 → 위 절차로 재생성)
+
+## 로컬 확인 워크플로 (기기별 차이 주의)
+- **새 기기(권장)**: 레포 루트를 그대로 정적 서빙(`npx serve` 등). preview 설정 `.claude/launch.json`의
+  'wm'(포트 8139)이 레포 루트를 서빙함. asset도 레포에 커밋돼 있어 추가 작업 불필요.
+- **원래 기기 특이사항(역사적 맥락)**: OneDrive 동기화 이슈로 `C:\Temp\Wellness_Marble\`에 사본을
+  두고 localhost:8200로 봤음. 그래서 매 편집 후 index.html+asset을 Temp로 복사해야 했음.
+  새 기기엔 해당 없음(레포 직접 서빙).
+- **preview 스크린샷/애니메이션 주의**: preview 페이지가 백그라운드(hidden)면 브라우저가
+  `requestAnimationFrame`을 정지 → 자전거/보상 애니메이션이 멈춰 보이고 스크린샷이 타임아웃.
+  애니메이션 검증은 실제 활성 탭 브라우저에서 할 것. 코드 검증은 `window.__rewards` 등으로.
+
+## 호스팅
+GitHub: https://github.com/jaewonize/Wellness-Marble (origin/main)
+GitHub Pages: https://jaewonize.github.io/Wellness-Marble/ (커밋·푸시 1~2분 후 반영)
+최적화된 보상 GLB는 커밋됨(Pages에서 표시되게). `.claude/settings.local.json`은 커밋 제외.
+
+## 다음 단계 (미구현)
+- 슬라이더/트리거 → 보드 씬 연동(`onScoresApplied()`): 말 속도↔저속노화, 슬롯 잠금/해제,
+  보상 드랍·회수, 황금열쇠/무인도 이벤트 씬
+- 보상 희귀도 등급, 나머지 타일 보상 모델, 점수↔속도 곡선
