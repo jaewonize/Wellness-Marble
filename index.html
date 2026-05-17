@@ -683,7 +683,7 @@ function makePlaceholderReward(zoneHex, variant) {
     new THREE.MeshStandardMaterial({ color: 0xefe8d8, roughness: 0.85 })
   );
   ped.position.y = 0.11;
-  ped.castShadow = true; ped.receiveShadow = true;
+  ped.castShadow = false; ped.receiveShadow = true;   // 임시 플레이스홀더 — 태양 그림자 X
   g.add(ped);
   const mat = new THREE.MeshStandardMaterial({ color: zoneHex, roughness: 0.5, metalness: 0.1 });
   let body;
@@ -692,7 +692,7 @@ function makePlaceholderReward(zoneHex, variant) {
   else if (variant === 2) body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.34, 0.8, 12), mat);
   else                    body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 0), mat);
   body.position.y = 0.22 + 0.42;
-  body.castShadow = true;
+  body.castShadow = false;                            // 임시 플레이스홀더 — 태양 그림자 X
   g.add(body);
   return g;
 }
