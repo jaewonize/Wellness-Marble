@@ -709,16 +709,11 @@ const REWARD_SLOTS = [
   { idx: 27, zone: 'manage', v: 3 },
   { idx: 30, zone: 'manage', v: 2 },
 ];
-// 시계탑(이정표) 코너 양옆 칸 — 이 보상 그림자가 이정표 밑에 겹쳐
-// '이정표 그림자'처럼 보였음. 이 둘만 태양 그림자 OFF (나머지는 유지).
-const NO_SHADOW_SLOTS = [13, 18];
 REWARD_SLOTS.forEach(s => {
   const pos = tilesInOrder[s.idx], b = tileBand[s.idx];
   const r = makePlaceholderReward(CAT[s.zone].color, s.v);
   // 컬러 띠 쪽(타일 위쪽)으로 이동 → 띠 구역까지 침범
   r.position.set(pos.x + b.x * REWARD_RADIAL, TOP_Y, pos.z + b.z * REWARD_RADIAL);
-  if (NO_SHADOW_SLOTS.includes(s.idx))
-    r.traverse(o => { if (o.isMesh) o.castShadow = false; });
   scene.add(r);
 });
 
@@ -732,7 +727,7 @@ const hemi = new THREE.HemisphereLight(0xfff3df, 0x70624b, 0.32);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2dd, 0.95);
 sun.position.set(-15, 17, 12);        // 고도 — 그림자 길이와 윗면 톤 그라데이션 균형
-sun.castShadow = false;   // [디버그 1단계] 모든 객체 태양 그림자 OFF
+sun.castShadow = true;   // [디버그 2단계] 태양 그림자 ON (이정표만 castShadow=false 유지)
 sun.shadow.mapSize.set(2048, 2048);   // VSM 라이트블리드 방지 위해 해상도 복구
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 90;
