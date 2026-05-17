@@ -732,7 +732,7 @@ const hemi = new THREE.HemisphereLight(0xfff3df, 0x70624b, 0.32);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2dd, 0.95);
 sun.position.set(-15, 17, 12);        // 고도 — 그림자 길이와 윗면 톤 그라데이션 균형
-sun.castShadow = true;
+sun.castShadow = false;   // [디버그 1단계] 모든 객체 태양 그림자 OFF
 sun.shadow.mapSize.set(2048, 2048);   // VSM 라이트블리드 방지 위해 해상도 복구
 sun.shadow.camera.near = 1;
 sun.shadow.camera.far = 90;
