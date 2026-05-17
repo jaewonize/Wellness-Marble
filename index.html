@@ -683,7 +683,7 @@ function makePlaceholderReward(zoneHex, variant) {
     new THREE.MeshStandardMaterial({ color: 0xefe8d8, roughness: 0.85 })
   );
   ped.position.y = 0.11;
-  ped.castShadow = false; ped.receiveShadow = true;   // 임시 플레이스홀더 — 태양 그림자 X
+  ped.castShadow = true; ped.receiveShadow = true;
   g.add(ped);
   const mat = new THREE.MeshStandardMaterial({ color: zoneHex, roughness: 0.5, metalness: 0.1 });
   let body;
@@ -692,7 +692,7 @@ function makePlaceholderReward(zoneHex, variant) {
   else if (variant === 2) body = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.34, 0.8, 12), mat);
   else                    body = new THREE.Mesh(new THREE.IcosahedronGeometry(0.36, 0), mat);
   body.position.y = 0.22 + 0.42;
-  body.castShadow = false;                            // 임시 플레이스홀더 — 태양 그림자 X
+  body.castShadow = true;
   g.add(body);
   return g;
 }
@@ -709,11 +709,16 @@ const REWARD_SLOTS = [
   { idx: 27, zone: 'manage', v: 3 },
   { idx: 30, zone: 'manage', v: 2 },
 ];
+// 시계탑(이정표) 코너 양옆 칸 — 이 보상 그림자가 이정표 밑에 겹쳐
+// '이정표 그림자'처럼 보였음. 이 둘만 태양 그림자 OFF (나머지는 유지).
+const NO_SHADOW_SLOTS = [13, 18];
 REWARD_SLOTS.forEach(s => {
   const pos = tilesInOrder[s.idx], b = tileBand[s.idx];
   const r = makePlaceholderReward(CAT[s.zone].color, s.v);
   // 컬러 띠 쪽(타일 위쪽)으로 이동 → 띠 구역까지 침범
   r.position.set(pos.x + b.x * REWARD_RADIAL, TOP_Y, pos.z + b.z * REWARD_RADIAL);
+  if (NO_SHADOW_SLOTS.includes(s.idx))
+    r.traverse(o => { if (o.isMesh) o.castShadow = false; });
   scene.add(r);
 });
 
