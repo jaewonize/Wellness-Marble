@@ -40,7 +40,7 @@ main {
   pointer-events: none;
 }
 #canvas-wrap {
-  width: 384px; height: 768px;
+  width: 360px; height: 780px;
   background: #ffffff;
   border-radius: 40px;
   overflow: hidden;
@@ -79,7 +79,7 @@ canvas:active { cursor:grabbing; }
 
 #sliders {
   width: 384px;
-  height: 768px;
+  height: 780px;
   background: #ffffff;
   border-radius: 0 40px 40px 0;
   padding: 90px 28px 28px 56px;
@@ -186,7 +186,7 @@ canvas:active { cursor:grabbing; }
 <main>
 <div id="canvas-wrap">
   <div id="phone-title">Wellness Marble</div>
-  <canvas id="board" width="384" height="768"></canvas>
+  <canvas id="board" width="360" height="780"></canvas>
   <div id="cards">
     <div class="card"><div class="name">잘 움직이기</div><div class="score" id="card-move">72</div></div>
     <div class="card"><div class="name">잘 쉬기</div><div class="score" id="card-rest">60</div></div>
@@ -234,7 +234,7 @@ canvas:active { cursor:grabbing; }
 <script src="lib/meshopt_decoder.js"></script>
 <script src="lib/GLTFLoader.js"></script>
 <script>
-const W = 384, H = 768;
+const W = 360, H = 780;
 const canvas = document.getElementById('board');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(W, H);
@@ -643,6 +643,16 @@ addSide('manage', 'island', 'start');
   window.__signpost = g;                  // 끝부분 안전 재확인용
 })();
 
+// ─── 공유 GLTFLoader (인스턴스 1개 + meshopt 디코더 설정 1회를 모든 GLB가 재사용) ───
+let __gltfLoader = null;
+function getGLTFLoader() {
+  if (__gltfLoader) return __gltfLoader;
+  if (typeof THREE.GLTFLoader !== 'function' || typeof MeshoptDecoder === 'undefined') return null;
+  __gltfLoader = new THREE.GLTFLoader();
+  __gltfLoader.setMeshoptDecoder(MeshoptDecoder);
+  return __gltfLoader;
+}
+
 // ─── 무인도 모서리: 야자수 GLB ───
 (function island() {
   const [cx, cz] = cornerPos.island;
@@ -650,23 +660,24 @@ addSide('manage', 'island', 'start');
   const g = new THREE.Group();
   g.position.set(cx + Math.sign(cx) * k, TOP_Y, cz + Math.sign(cz) * k);
   scene.add(g);
-  if (typeof THREE.GLTFLoader !== 'function' || typeof MeshoptDecoder === 'undefined') {
+  const loader = getGLTFLoader();
+  if (!loader) {
     console.warn('[island] 로더 미로딩 — 야자수 스킵');
     return;
   }
   const PALM_SIZE = 1.8;             // 야자수 최대변 목표 크기
-  const loader = new THREE.GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
   loader.load('asset/palm_pbr.glb', (gltf) => {
     const o = gltf.scene;
-    let box = new THREE.Box3().setFromObject(o);
-    const size = new THREE.Vector3(); box.getSize(size);
-    o.scale.setScalar(PALM_SIZE / Math.max(size.x, size.y, size.z));
-    box = new THREE.Box3().setFromObject(o);
-    const c = new THREE.Vector3(); box.getCenter(c);
+    // gltf.scene 루트 변환=단위 → 로컬=월드 AABB. 균일 스케일(원점 기준)이라
+    // 스케일 후 박스 = box*k. 전체 정점 재순회(setFromObject 2회) 불필요.
+    const box = new THREE.Box3().setFromObject(o);
+    const size = box.getSize(new THREE.Vector3());
+    const k = PALM_SIZE / Math.max(size.x, size.y, size.z);
+    o.scale.setScalar(k);
+    const c = box.getCenter(new THREE.Vector3()).multiplyScalar(k);
     o.position.x -= c.x;
     o.position.z -= c.z;
-    o.position.y -= box.min.y;       // 바닥을 g 원점(=타일 윗면)에
+    o.position.y -= box.min.y * k;   // 바닥을 g 원점(=타일 윗면)에
     o.traverse(m => {
       if (!m.isMesh) return;
       m.castShadow = true; m.receiveShadow = true;
@@ -953,24 +964,24 @@ window.__scores = scores;
 
 // ─── 자전거 GLB (PBR vs SHADED 비교) — 코어 앱과 격리(로더 없으면 스킵) ───
 (function loadBikes() {
-  if (typeof THREE.GLTFLoader !== 'function' || typeof MeshoptDecoder === 'undefined') {
+  const gltfLoader = getGLTFLoader();
+  if (!gltfLoader) {
     console.warn('[bikes] 로더 미로딩 — 스킵');
     return;
   }
   try {
-    const gltfLoader = new THREE.GLTFLoader();
-    gltfLoader.setMeshoptDecoder(MeshoptDecoder);
     const BIKE_SIZE = 1.4;        // 최대변 목표 크기
     const loadBike = (url, assign) => gltfLoader.load(url, (gltf) => {
       const o = gltf.scene;
-      let box = new THREE.Box3().setFromObject(o);
-      const size = new THREE.Vector3(); box.getSize(size);
-      o.scale.setScalar(BIKE_SIZE / Math.max(size.x, size.y, size.z));
-      box = new THREE.Box3().setFromObject(o);
-      const c = new THREE.Vector3(); box.getCenter(c);
+      // 스케일 후 박스 = box*k (원점 기준 균일 스케일) → setFromObject 1회로 충분
+      const box = new THREE.Box3().setFromObject(o);
+      const size = box.getSize(new THREE.Vector3());
+      const k = BIKE_SIZE / Math.max(size.x, size.y, size.z);
+      o.scale.setScalar(k);
+      const c = box.getCenter(new THREE.Vector3()).multiplyScalar(k);
       o.position.x -= c.x;                       // 접지중심을 피벗 원점에
       o.position.z -= c.z;
-      o.position.y -= box.min.y;
+      o.position.y -= box.min.y * k;
       o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
       const pivot = new THREE.Group();
       pivot.add(o);                          // 자전거 태양 그림자 ON (VSM, 부드러움)
@@ -1005,13 +1016,12 @@ window.__scores = scores;
 
 // ─── 보상 GLB 배치 (REWARD_MODELS → 타일) ───
 (function loadRewards() {
-  if (typeof THREE.GLTFLoader !== 'function' || typeof MeshoptDecoder === 'undefined') {
+  const loader = getGLTFLoader();
+  if (!loader) {
     console.warn('[rewards] 로더 미로딩 — 스킵');
     return;
   }
   const REWARD_SIZE = 1.2;          // 모델 최대변 기준 크기(타일 위 일관 크기)
-  const loader = new THREE.GLTFLoader();
-  loader.setMeshoptDecoder(MeshoptDecoder);
   window.__rewards = [];
   // 보상 오브젝트만 재질 튜닝(보드·자전거 영향 없음): metalness 제거 + 밝기·콘트라스트
   function tuneMaterials(root, bright, contrast) {
@@ -1044,14 +1054,15 @@ window.__scores = scores;
     const pos = tilesInOrder[idx], b = tileBand[idx];
     loader.load(R.url, (gltf) => {
       const o = gltf.scene;
-      let box = new THREE.Box3().setFromObject(o);
-      const size = new THREE.Vector3(); box.getSize(size);
-      o.scale.setScalar((REWARD_SIZE / Math.max(size.x, size.y, size.z)) * s);  // 타일별 크기 배율
-      box = new THREE.Box3().setFromObject(o);
-      const c = new THREE.Vector3(); box.getCenter(c);
+      // 스케일 후 박스 = box*k (원점 기준 균일 스케일) → setFromObject 1회로 충분
+      const box = new THREE.Box3().setFromObject(o);
+      const size = box.getSize(new THREE.Vector3());
+      const k = (REWARD_SIZE / Math.max(size.x, size.y, size.z)) * s;  // 타일별 크기 배율
+      o.scale.setScalar(k);
+      const c = box.getCenter(new THREE.Vector3()).multiplyScalar(k);
       o.position.x -= c.x;                       // 풋프린트 중심을 원점에
       o.position.z -= c.z;
-      o.position.y -= box.min.y;                 // 바닥을 y=0에
+      o.position.y -= box.min.y * k;             // 바닥을 y=0에
       o.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
       tuneMaterials(o, bright, contrast);
       const wrap = new THREE.Group();

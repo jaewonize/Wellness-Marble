@@ -232,7 +232,7 @@ Wellness_Marble/
 
 ---
 
-# 현재 구현 상태 / 다른 기기 작업 인계 (2026-05-18 기준)
+# 현재 구현 상태 / 다른 기기 작업 인계 (2026-05-21 기준)
 
 > 위쪽 "보상 테이블 / 트리거 버튼 9개"는 **설계 스펙(미래)**. 아래가 **실제 구현 상태**.
 > 컨트롤 패널은 Slow_Museum 패널을 그대로 재사용(설계 스펙의 9개 트리거와 다름) — 현재 컨트롤은
@@ -245,6 +245,17 @@ Wellness_Marble/
 - 보상 14개 GLB를 타일에 배치(`REWARD_MODELS` → `loadRewards()`), 무인도 야자수 GLB(`island()`, `window.__palm`)
 - 그림자: VSM(부드러운 소멸) + 이정표만 셰도우 패스에서 물리적 제외
 - 자전거 발밑 진행축 컨택트 블롭, 이정표 발밑 블롭
+- 폰 화면 **360×780** (`#canvas-wrap`/`<canvas>`/`const W,H`), 컨트롤 패널 `#sliders` 높이 동일 매칭
+
+## 로더/로딩 (2026-05-21)
+- **공유 GLTFLoader 1개**: `getGLTFLoader()` 헬퍼가 인스턴스+`setMeshoptDecoder` 1회 캐싱. 야자수·자전거·
+  보상 3개 사이트가 같은 로더 재사용(기존 3개 인스턴스 합침). 기존 "로더 미로딩 시 스킵" 가드 그대로.
+- **`Box3().setFromObject()` 모델당 1회**: 기존엔 스케일 측정용 + 적용 후 재측정 = 전체 정점 2회 순회.
+  `gltf.scene` 루트가 단위변환이라 원점 기준 균일 스케일 후 박스 = `box*k`로 산술 도출
+  (`getCenter().multiplyScalar(k)`, `box.min.y * k`). 결과 동일, 메인스레드 정점 순회량 절반.
+- meshopt 디코딩은 여전히 **메인스레드 동기**(`lib/meshopt_decoder.js`가 워커 없는 기본 빌드). 로컬 버벅임의
+  주범은 여기 — 추후 워커 빌드로 교체 시 `useWorkers(n)` 호출 필요. 깃허브 Pages 로딩은 14MB 다운로드가
+  지배적이라 위 두 최적화 영향 미미.
 
 ## 그림자 시스템 (중요 — 재실수 방지)
 - `renderer.shadowMap.type = THREE.VSMShadowMap` (부드럽고 자연스러운 소멸).
